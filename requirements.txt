@@ -18,3 +18,4 @@ python-dotenv
 wikipedia
 beautifulsoup4
 datasets
+huggingface-hub
