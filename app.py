@@ -173,9 +173,9 @@ else:
 
 with st.sidebar.expander("📖 About Architecture"):
     st.markdown("""
-        **Developer:** Sonu Sourav | **© 2026**
+        **Developer:** AI Engineer Mr. Sonu Sourav | **© 2026**
         * **Core:** Random Forest (Scikit-Learn)
-        * **AI:** Gemini 1.5 Flash + LCEL RAG
+        * **AI:** Gemini 2.5 Flash + LCEL RAG
         * **Vector DB:** ChromaDB (Wiki-Context)
     """)
 
