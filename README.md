@@ -1,4 +1,4 @@
-# [🌤️ Weatherify: Hybrid AI Weather Prediction System](https://weatherify-hybrid-ai.streamlit.app/)
+# [🌤️ Weatherify: Hybrid AI Weather Prediction System (Demo Link)](https://weatherify-hybrid-ai.streamlit.app/)
 
 **Weatherify** is an advanced meteorological tool that merges classical machine learning with Generative AI (RAG) to provide high-precision temperature forecasts and scientific climatological insights.
 
