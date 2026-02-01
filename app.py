@@ -87,7 +87,7 @@ def initialize_rag_engine(_api_key):
             vector_db = Chroma.from_documents(docs, embeddings, persist_directory=DB_PATH)
     
     retriever = vector_db.as_retriever(search_kwargs={"k": 2})
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=_api_key)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=_api_key)
     
     # Define LCEL Prompt
     prompt = ChatPromptTemplate.from_template("""
