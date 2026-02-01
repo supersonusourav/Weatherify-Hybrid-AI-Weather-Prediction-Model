@@ -20,3 +20,4 @@ chromadb
 sentence-transformers
 python-dotenv
 wikipedia
+langchain_classic
