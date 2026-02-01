@@ -1,16 +1,8 @@
-streamlit
+streamlit==1.41.0
 pandas
 numpy
 joblib
 scikit-learn
-xgboost
-plotly
-requests
-beautifulsoup4
-datasets
-langchain
-huggingface-hub
-hf_transfer
 langchain>=0.3.0
 langchain-community
 langchain-core
@@ -20,4 +12,3 @@ chromadb
 sentence-transformers
 python-dotenv
 wikipedia
-langchain_classic
