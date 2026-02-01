@@ -1,5 +1,6 @@
 import os
 import gc
+import time
 import joblib
 import datetime
 import pandas as pd
@@ -7,19 +8,46 @@ import numpy as np
 import streamlit as st
 from dotenv import load_dotenv
 
-# --- 1. INITIALIZATION & PAGE CONFIG ---
+# --- 1. INITIALIZATION & RESOURCE MANAGEMENT ---
 st.set_page_config(page_title="Weatherify AI", page_icon="🌤️", layout="wide")
 load_dotenv()
 
+# --- SIDEBAR: API KEY & CONFIGURATION ---
+with st.sidebar:
+    st.markdown("### 🔑 Authentication")
+    # Try to get from environment first (for convenience)
+    default_key = os.getenv("GOOGLE_API_KEY") or ""
+    try:
+        # Check streamlit secrets if they exist
+        if not default_key:
+            default_key = st.secrets.get("GOOGLE_API_KEY", "")
+    except Exception:
+        pass
+
+    API_KEY = st.text_input("Google API Key", value=default_key, type="password")
+    
+    if not API_KEY:
+        st.warning("Please enter your Google API Key to enable AI features.")
+
+    st.divider()
+    st.header("📍 Target Parameters")
+    city_input = st.text_input("City Name", placeholder="e.g. London")
+    
+    col_d, col_t = st.columns(2)
+    date_input = col_d.date_input("Date", datetime.date.today())
+    time_input = col_t.time_input("Time", datetime.time(12, 0))
+    
+    query_input = st.text_area("Weatherify Inquiry", placeholder="Ask about climate trends...")
+    run_btn = st.button("🚀 Run Weatherify Analytics", use_container_width=True, type="primary")
+
 DB_PATH = "./weather_db"
-API_KEY = st.secrets["GOOGLE_API_KEY"] if "GOOGLE_API_KEY" in st.secrets else os.getenv("GOOGLE_API_KEY")
 
 def cleanup_memory():
     gc.collect()
 
 # --- 2. DATA & MODEL LOADING (CACHED) ---
 @st.cache_resource
-def load_resources():
+def load_scientific_resources():
     try:
         model = joblib.load('weather_model.joblib')
         scaler = joblib.load('scaler.joblib')
@@ -28,22 +56,27 @@ def load_resources():
         coords_map = coords_df.set_index('City').T.to_dict()
         return model, scaler, coords_map
     except Exception as e:
-        st.error(f"Initialization Error: {e}. Check if .joblib and .csv files exist.")
+        st.error(f"❌ Initialization Error: {e}")
         return None, None, None
 
-MODEL, SCALER, COORDS_MAP = load_resources()
+MODEL, SCALER, COORDS_MAP = load_scientific_resources()
 
 # --- 3. THE INTELLIGENCE LAYER (RAG) ---
+# Import from the correct 0.3 modules
 from langchain_community.document_loaders import WikipediaLoader
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
+# These are the modern paths for Retrieval Chains
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 @st.cache_resource
-def initialize_rag():
+def initialize_rag_engine(_api_key):
+    if not _api_key:
+        return None
+    
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
     if os.path.exists(DB_PATH) and len(os.listdir(DB_PATH)) > 0:
@@ -53,25 +86,22 @@ def initialize_rag():
         docs = loader.load()
         vector_db = Chroma.from_documents(docs, embeddings, persist_directory=DB_PATH)
     
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=API_KEY) # Updated to 1.5-flash
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=_api_key)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are 'Weatherify', an AI weather analyst. Use context to explain thermodynamics. Context: {context}"),
         ("human", "{input}")
     ])
     return create_retrieval_chain(vector_db.as_retriever(), create_stuff_documents_chain(llm, prompt))
 
-RAG_CHAIN = initialize_rag()
-
-# --- 4. ANALYTICS LOGIC ---
-def predict_weather(city_name, date_val, time_val, user_query):
+# --- 4. ANALYTICS ENGINE ---
+def run_weatherify(city_name, date_val, time_val, user_query):
     try:
         city = city_name.strip().title()
         if city not in COORDS_MAP:
-            return None, f"### 🏙️ Record Missing\n'{city}' is not in our database."
+            return None, f"### 🏙️ Record Missing\n'{city}' is not in our historical database."
 
         dt = datetime.datetime.combine(date_val, time_val)
         info = COORDS_MAP[city]
-        
         def cln(v): return float(v[:-1]) if v[-1] in ['N', 'E'] else -float(v[:-1])
         lat, lon = cln(info['Latitude']), cln(info['Longitude'])
         
@@ -81,52 +111,50 @@ def predict_weather(city_name, date_val, time_val, user_query):
         report = f"### 📊 Analysis for {city}\n"
         report += f"The **Random Forest Regressor** predicts a baseline of {temp:.1f}°C."
 
-        if user_query:
-            with st.spinner("AI Analyst is thinking..."):
-                ai_res = RAG_CHAIN.invoke({"input": f"Analyze {temp:.1f}C for {city} in {dt.strftime('%B')}. {user_query}"})
+        if user_query and API_KEY:
+            rag_chain = initialize_rag_engine(API_KEY)
+            with st.spinner("🔍 AI Analyst is thinking..."):
+                ai_res = rag_chain.invoke({"input": f"Analyze {temp:.1f}C for {city} in {dt.strftime('%B')}. {user_query}"})
                 report += f"\n\n---\n### 🔍 Weatherify AI Insight\n{ai_res['answer']}"
+        elif user_query and not API_KEY:
+            report += "\n\n⚠️ *AI Insight skipped: No API Key provided.*"
         
         return f"{temp:.1f}°C", report
     except Exception as e:
         return "Error", f"### ❌ System Alert\n{str(e)}"
 
-# --- 5. STREAMLIT UI DESIGN ---
+# --- 5. UI DESIGN ---
 st.markdown("""
-    <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-        <h1 style='margin: 0; color: #00BFFF;'>🌤️ Weatherify</h1>
-        <p style='margin: 0; font-style: italic; opacity: 0.7;'>Hybrid Intelligence Predictive System</p>
+    <div style="display: flex; align-items: center; gap: 20px; padding: 15px; background: rgba(0, 198, 255, 0.1); border-radius: 15px; margin-bottom: 25px;">
+        <div style="font-size: 50px;">🌤️</div>
+        <div>
+            <h1 style='margin: 0; color: #00BFFF;'>Weatherify</h1>
+            <p style='margin: 0; font-style: italic; opacity: 0.7;'>Hybrid Intelligence Predictive System</p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
-with st.sidebar:
-    st.header("📍 Configuration")
-    loc_in = st.text_input("Target City", placeholder="e.g. London")
-    date_in = st.date_input("Forecast Date", datetime.date.today())
-    time_in = st.time_input("Forecast Time", datetime.time(12, 0))
-    query_in = st.text_area("Weatherify Inquiry", placeholder="Ask about trends or anomalies...")
-    run_btn = st.button("🚀 Run Analytics", use_container_width=True)
-    
-    st.divider()
-    with st.expander("📖 About The Project"):
-        st.markdown("""
-            **Developer:** Sonu Sourav | **© 2026**
-            - **Models:** Scikit-Learn + Gemini 3
-            - **Data:** ChromaDB + Wikipedia RAG
-        """)
-
-# Main Display Area
-col1, col2 = st.columns([1, 2])
+main_col1, main_col2 = st.columns([1, 2])
 
 if run_btn:
-    if loc_in:
-        temp_res, report_res = predict_weather(loc_in, date_in, time_in, query_in)
-        with col1:
-            st.metric("Predicted Temperature", temp_res)
-        with col2:
-            st.markdown(report_res)
+    if city_input:
+        temp_out, report_out = run_weatherify(city_input, date_input, time_input, query_input)
+        with main_col1:
+            st.metric(label="Predicted Temperature", value=temp_out)
+        with main_col2:
+            st.markdown(report_out)
     else:
-        st.warning("Please enter a city name.")
+        st.warning("Please specify a city in the sidebar.")
 else:
-    col2.info("### Weatherify Standby\nEnter details in the sidebar to initialize analysis.")
+    main_col2.info("### 📡 System Standby\nEnter location and schedule in the sidebar to initialize.")
 
-cleanup_memory()
+with st.sidebar.expander("📖 About Architecture"):
+    st.markdown("""
+        **Developer:** Sonu Sourav | **© 2026**
+        * **Core:** Random Forest (Scikit-Learn)
+        * **AI:** Gemini 3 Flash + LangChain RAG
+        * **DB:** ChromaDB
+    """)
+
+if __name__ == "__main__":
+    cleanup_memory()
