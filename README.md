@@ -1,3 +1,15 @@
+---
+title: Weatherify Hybrid AI
+emoji: 🌤️
+colorFrom: blue
+colorTo: gray
+sdk: gradio
+sdk_version: 6.5.1
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🌤️ Weatherify: Hybrid AI Weather Prediction System
 
 **Weatherify** is an advanced meteorological tool that merges classical machine learning with Generative AI (RAG) to provide high-precision temperature forecasts and scientific climatological insights.
